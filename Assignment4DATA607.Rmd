@@ -1,0 +1,106 @@
+---
+title: "CUNY SPS - Master of Science in Data Science - DATA607"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Assignment 4: Tidying and Transforming Data
+# Mario Pena
+# 9/29/2019
+
+**Assignment Description: In this assignment we create a .CSV file with some flights data and then read it from R to tidy and transform the data.
+
+
+I saved the data in a github repository in order to make it accessible from any computer, thus I will load the data from there into R:
+
+```{r}
+#Load the libraries we will need to tidy and analyze our data
+library(tidyr)
+library(dplyr)
+library(ggplot2)
+
+flightsData <- read.csv("https://raw.githubusercontent.com/marioipena/Assignment4DATA607/master/flightsData.csv", header = TRUE)
+```
+
+Let's view our data:
+
+```{r}
+flightsData
+```
+
+Let's tidy the data. We will get rid of the row with no information and assign a name to the airline and status columns. We will also add the names of the airlines to the two empty cells in the airline column. Additionally we would like to transform the data from wide to long in order to prepare it for analysis:
+
+```{r}
+flightsData2 <- flightsData[-c(3),]
+flightsData2 <- flightsData2 %>% rename(Airline = X, Status = X.1)
+flightsData2[2, 1] <- "ALASKA"
+flightsData2[4, 1] <- "AM WEST"
+flightsData2 <- flightsData2 %>% gather("Destination", "Flights", 3:7) %>% arrange(Airline, desc(Status), Destination)
+flightsData2
+```
+
+Below are two graphs representing the number of delayed and ontime flights to each destination by airline:
+
+```{r, message=FALSE, warning=FALSE, fig.show="hold", out.width="50%", fig.height=3}
+airline1 <- filter(flightsData2, Airline == "ALASKA")
+airline2 <- filter(flightsData2, Airline == "AM WEST")
+
+ggplot(airline1, aes(Destination, Flights, fill = Status, color = Airline)) + geom_bar(position="dodge", stat="identity")
+ggplot(airline2, aes(Destination, Flights, fill = Status, color = Airline)) + geom_bar(position="dodge", stat="identity")
+```
+
+I have used the spread() function in order to transform the data to show the number of delayed and on time flights in  two new columns, "delayed" and "on time".
+
+```{r}
+dataTran <- spread(flightsData2, Status, Flights)
+dataTran
+```
+
+Total delayed and on time by destination and their respective ratio:
+
+```{r, message=FALSE, warning=FALSE, fig.show="hold", out.width="80%", fig.height=3}
+
+totalCity <- dataTran %>% group_by(Destination) %>% summarise(Delayed = sum(delayed),OnTime = sum(`on time`), Total = Delayed + OnTime) %>% mutate(DelayRatio = Delayed/Total, OnTimeRatio = OnTime/Total)
+totalCity
+
+statusRatio <- select(totalCity, -c("Delayed", "OnTime", "Total"))
+statusRatio <- statusRatio %>% rename(Delay = DelayRatio, OnTime = OnTimeRatio) %>% gather("Status", "Ratio", 2:3)
+
+ggplot() + geom_bar (aes(x = Destination, y = Ratio, fill = Status), data = statusRatio, stat = "identity")
+```
+
+We can see above that San Francisco has the largest ratio of delayed flights with about 22%, while Phoenix has the largest ratio of on time flights with about 92%.
+
+The Destinations with the maximum and minimum number of flights respectively:
+
+```{r}
+max <- totalCity %>% filter(Total == max(Total))
+max
+min <- totalCity %>% filter(Total == min(Total))
+min
+```
+
+Total delayed and on time by airline and their respective ratio:
+
+```{r, message=FALSE, warning=FALSE, fig.show="hold", out.width="80%", fig.height=3}
+totalAirline <- dataTran %>% group_by(Airline) %>% summarise(Delayed = sum(delayed),OnTime = sum(`on time`), Total = Delayed + OnTime) %>% mutate(DelayRatio = Delayed/Total, OnTimeRatio = OnTime/Total)
+totalAirline
+
+statusRatio2 <- select(totalAirline, -c("Delayed", "OnTime", "Total"))
+statusRatio2 <- statusRatio2 %>% rename(Delay = DelayRatio, OnTime = OnTimeRatio) %>% gather("Status", "Ratio", 2:3)
+
+ggplot() + geom_bar (aes(x = Airline, y = Ratio, fill = Status), data = statusRatio2, stat = "identity")
+```
+
+We can see above that the ratios for delayed and on time flights for both airlines are fairly similar when destinations are combined, however AM West airlines has nearly double the number of flights than those of Alaska airlines.
+
+Finally, we can compare the number of delayed and on time flights by destination and Airline. In the plot below we can clearly see that AM WEST airline had the most on time flights by far. However, there are two destinations to which ALASKA airline has more on time fights than AM WEST airline, and those are San Francisco and Seattle.
+
+```{r, message=FALSE, warning=FALSE, fig.show="hold", out.width="80%", fig.height=3}
+ggplot(flightsData2, aes(Destination, Flights, fill = Status, color = Airline)) + geom_bar(position="dodge", stat="identity")
+```
